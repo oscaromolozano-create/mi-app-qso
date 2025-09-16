@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log ACTIVDORES RCV</title>
+    <!-- Incluyendo Tailwind CSS para el estilo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1323;
+            color: #e2e8f0;
+        }
+        .container-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        input, select {
+            background-color: #334155;
+            border-color: #475569;
+            color: #cbd5e0;
+            border-radius: 0.5rem;
+            height: 2.5rem;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+        input:focus, select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5);
+            border-color: #60a5fa;
+        }
+        .btn {
+            font-weight: 600;
+            padding-top: 0.625rem;
+            padding-bottom: 0.625rem;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .btn-green { background-color: #10b981; color: white; }
+        .btn-green:hover { background-color: #059669; }
+        .btn-orange { background-color: #f97316; color: white; }
+        .btn-orange:hover { background-color: #ea580c; }
+        .btn-red { background-color: #ef4444; color: white; }
+        .btn-red:hover { background-color: #dc2626; }
+        .btn-blue { background-color: #3b82f6; color: white; }
+        .btn-blue:hover { background-color: #2563eb; }
+        .btn-purple { background-color: #9333ea; color: white; }
+        .btn-purple:hover { background-color: #7e22ce; }
+        .btn-gray { background-color: #4b5563; color: white; }
+        .btn-gray:hover { background-color: #6b7280; }
+        .table-container {
+            border-radius: 0.75rem;
+            overflow: hidden;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+        }
+        .table-header {
+            background-color: #0f172a;
+            color: #94a3b8;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+        }
+        .logbook-table th, .logbook-table td {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 1px solid #334155;
+        }
+        .logbook-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+    </style>
+    <script>
+        let loggedInActivator = null;
+        let selectedQsoIds = new Set();
+        let currentLogbookName = '';
+        
+        // Usuarios predefinidos
+        const usersDB = {
+            "4dt": { clave: "DT4EA@", activador: "EA4DT" },
+            "5but": { clave: "BUHEC5", activador: "EC5BUH" },
+            "1evi": { clave: "EVI1EA", activador: "EA1EVI" },
+            "1fia": { clave: "FIA4EA", activador: "EA1FIA" },
+            "5cnp": { clave: "5CNPEA", activador: "EA5CNP" },
+            "5jfk": { clave: "JFKEA5", activador: "EA5JFK" },
+            "5rcf": { clave: "RCFEA5", activador: "EA5RCF" },
+            "5ixv": { clave: "IXVEA5", activador: "EA5IXV" },
+            "admin": { clave: "EA5RCF-ADMIN", activador: "ADMIN" },
+            "5joy": { clave: "JOYEA5", activador: "EA5JOY" }
+        };
+
+        // Función para mostrar un modal personalizado (reemplaza alert y confirm)
+        function showModal(message, onConfirm = null) {
+            const modal = document.getElementById('modal');
+            const modalMessage = document.getElementById('modal-message');
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+
+            if (!modal || !modalMessage || !confirmBtn || !cancelBtn) {
+                console.error("Elementos del modal no encontrados.");
+                return;
+            }
+
+            modalMessage.textContent = message;
+            
+            if (onConfirm) {
+                confirmBtn.textContent = 'Sí';
+                cancelBtn.classList.remove('hidden');
+                confirmBtn.onclick = () => { onConfirm(); hideModal(); };
+                cancelBtn.onclick = hideModal;
+            } else {
+                confirmBtn.textContent = 'Aceptar';
+                cancelBtn.classList.add('hidden');
+                confirmBtn.onclick = hideModal;
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function hideModal() {
+            const modal = document.getElementById('modal');
+            if (modal) modal.classList.add('hidden');
+        }
+        
+        function showCodeConfirmModal(onConfirm) {
+            const codeModal = document.getElementById('code-confirm-modal');
+            const codeInput = document.getElementById('delete-all-code');
+            const confirmBtn = document.getElementById('code-confirm-btn');
+            const cancelBtn = document.getElementById('code-cancel-btn');
+            
+            if (!codeModal || !codeInput || !confirmBtn || !cancelBtn) {
+                console.error("Elementos del modal de confirmación no encontrados.");
+                return;
+            }
+
+            codeInput.value = '';
+            confirmBtn.onclick = () => {
+                const code = codeInput.value;
+                onConfirm(code);
+                hideCodeConfirmModal();
+            };
+            cancelBtn.onclick = hideCodeConfirmModal;
+            codeModal.classList.remove('hidden');
+        }
+
+        function hideCodeConfirmModal() {
+            const codeModal = document.getElementById('code-confirm-modal');
+            if (codeModal) codeModal.classList.add('hidden');
+        }
+        
+        // Carga los QSOs de un logbook específico
+        function loadLogbooks() {
+            const data = localStorage.getItem(`logbooks-${loggedInActivator}`);
+            return data ? JSON.parse(data) : {};
+        }
+
+        // Guarda todos los logbooks
+        function saveLogbooks(logbooks) {
+            localStorage.setItem(`logbooks-${loggedInActivator}`, JSON.stringify(logbooks));
+            renderLogbookSelect(logbooks);
+        }
+
+        // Carga los QSOs del logbook actual
+        function loadCurrentLogbookQSOs() {
+            if (!currentLogbookName) return [];
+            const logbooks = loadLogbooks();
+            return logbooks[currentLogbookName] || [];
+        }
+
+        // Actualiza el estado del botón de eliminar según la selección
+        function updateDeleteButtonState() {
+            const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.disabled = selectedQsoIds.size === 0;
+            }
+        }
+        
+        // Renderiza la tabla de QSOs
+        function renderQSOs(qsos) {
+            const qsoTableBody = document.getElementById('qso-table-body');
+            if (!qsoTableBody) return;
+            
+            qsoTableBody.innerHTML = '';
+            if (qsos.length === 0) {
+                qsoTableBody.innerHTML = `<tr><td colspan="7" class="text-gray-400 text-center py-8">Todavía no hay QSOs registrados en este logbook.</td></tr>`;
+                selectedQsoIds.clear();
+                const selectAllCheckbox = document.getElementById('select-all-qso');
+                if (selectAllCheckbox) selectAllCheckbox.checked = false;
+                updateDeleteButtonState();
+                return;
+            }
+
+            qsos.forEach(qso => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-700/50 transition-colors duration-200';
+                const isSelected = selectedQsoIds.has(qso.id);
+
+                tr.innerHTML = `
+                    <td class="table-cell"><input type="checkbox" data-qso-id="${qso.id}" ${isSelected ? 'checked' : ''} class="qso-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500 bg-slate-600 border-slate-500"></td>
+                    <td class="table-cell">${qso.indicativo}</td>
+                    <td class="table-cell">${qso.frecuencia}</td>
+                    <td class="table-cell">${qso.banda}</td>
+                    <td class="table-cell">${qso.modo}</td>
+                    <td class="table-cell">${qso.rstEnv}</td>
+                    <td class="table-cell">${qso.date} ${qso.time}</td>
+                `;
+                qsoTableBody.appendChild(tr);
+            });
+            updateDeleteButtonState();
+        }
+
+        // Renderiza el menú de selección de logbooks
+        function renderLogbookSelect(logbooks) {
+            const logbookSelect = document.getElementById('logbook-select');
+            if (!logbookSelect) return;
+            logbookSelect.innerHTML = '';
+            const logbookNames = Object.keys(logbooks).sort();
+            logbookNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                logbookSelect.appendChild(option);
+            });
+            if (currentLogbookName && logbookNames.includes(currentLogbookName)) {
+                logbookSelect.value = currentLogbookName;
+            } else {
+                currentLogbookName = logbookNames[0] || '';
+                logbookSelect.value = currentLogbookName;
+            }
+            if (currentLogbookName) {
+                 document.getElementById('current-logbook-name').textContent = `Logbook actual: ${currentLogbookName}`;
+                 document.getElementById('logbook-section').classList.remove('hidden');
+            } else {
+                 document.getElementById('current-logbook-name').textContent = 'Selecciona o crea un Logbook';
+                 document.getElementById('logbook-section').classList.add('hidden');
+            }
+            renderQSOs(loadCurrentLogbookQSOs());
+        }
+
+        // Renderiza la tabla de ranking (utiliza datos simulados o predefinidos)
+        function renderRanking() {
+            const rankingTableBody = document.getElementById('ranking-table-body');
+            if (!rankingTableBody) return;
+            
+            // Simulación de datos de ranking
+            const activators = Object.values(usersDB).map(user => user.activador).filter(act => act !== "ADMIN");
+            const rankingData = activators.map(act => {
+                const logbooks = localStorage.getItem(`logbooks-${act}`);
+                let totalQSOs = 0;
+                if (logbooks) {
+                    const parsedLogbooks = JSON.parse(logbooks);
+                    for (const logName in parsedLogbooks) {
+                        totalQSOs += parsedLogbooks[logName].length;
+                    }
+                }
+                return {
+                    activador: act,
+                    total_qsos: totalQSOs
+                };
+            }).sort((a, b) => b.total_qsos - a.total_qsos);
+
+            rankingTableBody.innerHTML = '';
+            rankingData.forEach((ranking, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-700/50 transition-colors duration-200';
+                tr.innerHTML = `
+                    <td class="table-cell">${index + 1}</td>
+                    <td class="table-cell">${ranking.activador}</td>
+                    <td class="table-cell">${ranking.total_qsos}</td>
+                `;
+                rankingTableBody.appendChild(tr);
+            });
+        }
+        
+        // Rellena la fecha y hora UTC
+        function updateDateTime() {
+            const fechaHoraUtcInput = document.getElementById('fecha-hora-utc');
+            if (fechaHoraUtcInput) {
+                const now = new Date();
+                const pad = (num) => num.toString().padStart(2, '0');
+                const utcDateTime = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}`;
+                fechaHoraUtcInput.value = utcDateTime;
+            }
+        }
+
+        // Guarda el valor de RST en el almacenamiento local
+        function saveRstValue(value) {
+            localStorage.setItem('lastRstValue', value);
+        }
+
+        // Carga el último valor de RST del almacenamiento local
+        function loadRstValue() {
+            const rstSelect = document.getElementById('rst-env-select');
+            const lastValue = localStorage.getItem('lastRstValue');
+            if (rstSelect && lastValue) rstSelect.value = lastValue;
+        }
+        
+        // Elimina el logbook seleccionado
+        function deleteAllRecords() {
+            if (!loggedInActivator || !currentLogbookName) return showModal("Error: No se pudo determinar el logbook.");
+            showCodeConfirmModal((code) => {
+                if (code && code.toUpperCase() === loggedInActivator.toUpperCase()) {
+                    const logbooks = loadLogbooks();
+                    delete logbooks[currentLogbookName];
+                    saveLogbooks(logbooks);
+                    currentLogbookName = Object.keys(logbooks)[0] || '';
+                    renderLogbookSelect(logbooks);
+                    selectedQsoIds.clear();
+                    showModal(`El logbook "${code.toUpperCase()}" ha sido eliminado.`);
+                } else {
+                    showModal("Código de confirmación incorrecto.");
+                }
+            });
+        }
+        
+        // Elimina los registros seleccionados
+        function deleteSelectedRecords() {
+            if (selectedQsoIds.size === 0) return showModal("Selecciona al menos un registro para borrar.");
+            showModal(`¿Seguro que quieres eliminar los ${selectedQsoIds.size} registros seleccionados?`, () => {
+                const logbooks = loadLogbooks();
+                let qsos = logbooks[currentLogbookName] || [];
+                qsos = qsos.filter(qso => !selectedQsoIds.has(qso.id));
+                logbooks[currentLogbookName] = qsos;
+                saveLogbooks(logbooks);
+                selectedQsoIds.clear();
+                showModal("Registros seleccionados eliminados.");
+            });
+        }
+
+        // Cierra la sesión
+        function logout() {
+            loggedInActivator = null;
+            currentLogbookName = '';
+            const loginContainer = document.getElementById('login-container');
+            const userPanel = document.getElementById('user-panel');
+            const loggedInContent = document.getElementById('logged-in-content');
+            const userInfoButtons = document.getElementById('user-info-buttons');
+            const logbookSection = document.getElementById('logbook-section');
+            
+            if (loginContainer) loginContainer.classList.remove('hidden');
+            if (userPanel) userPanel.classList.add('hidden');
+            if (loggedInContent) loggedInContent.classList.add('hidden');
+            if (userInfoButtons) userInfoButtons.classList.add('hidden');
+            if (logbookSection) logbookSection.classList.add('hidden');
+            
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) loginForm.reset();
+        }
+
+        // Exporta los datos a un archivo ADI
+        function exportToADI() {
+            const allQsoData = loadCurrentLogbookQSOs();
+            if (allQsoData.length === 0) {
+                showModal("No hay datos para exportar.");
+                return;
+            }
+
+            let adiContent = 'Generated by Log ACTIVDORES RCV\n<EOH>\n\n';
+            
+            allQsoData.forEach(qso => {
+                const qsoDate = new Date(`${qso.date}T${qso.time}`);
+                const dateStr = qsoDate.toISOString().slice(0, 10).replace(/-/g, '');
+                const timeStr = qsoDate.toISOString().slice(11, 16).replace(/:/g, '');
+
+                adiContent += `<CALL:${qso.indicativo.length}>${qso.indicativo}\n`;
+                adiContent += `<QSO_DATE:${dateStr.length}>${dateStr}\n`;
+                adiContent += `<TIME_ON:${timeStr.length}>${timeStr}\n`;
+                adiContent += `<FREQ:${qso.frecuencia.length}>${qso.frecuencia}\n`;
+                adiContent += `<BAND:${qso.banda.length}>${qso.banda}\n`;
+                adiContent += `<MODE:${qso.modo.length}>${qso.modo}\n`;
+                adiContent += `<RST_SENT:${qso.rstEnv.length}>${qso.rstEnv}\n`;
+                adiContent += '<EOR>\n\n';
+            });
+
+            const blob = new Blob([adiContent], { type: 'text/plain' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${currentLogbookName}-${loggedInActivator}.adi`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // Importa QSOs desde un archivo ADIF
+        function importADIF(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const adifContent = e.target.result;
+                const adifRecords = parseAdif(adifContent);
+                const logbooks = loadLogbooks();
+                let qsos = logbooks[currentLogbookName] || [];
+                
+                const newQSOs = [];
+                adifRecords.forEach(qso => {
+                    newQSOs.push({
+                        id: Date.now() + Math.random().toString(36).substring(2, 9), // Generar un ID único
+                        indicativo: qso.callsign,
+                        frecuencia: qso.frequency,
+                        banda: qso.band,
+                        modo: qso.mode,
+                        rstEnv: qso.rstSent,
+                        activador: loggedInActivator,
+                        date: qso.qsoDate,
+                        time: qso.timeOn
+                    });
+                });
+                qsos = [...qsos, ...newQSOs];
+                logbooks[currentLogbookName] = qsos;
+                saveLogbooks(logbooks);
+                showModal(`¡Importación completada! Se han añadido ${newQSOs.length} registros a "${currentLogbookName}".`);
+            };
+            reader.readAsText(file);
+        }
+
+        // Analizador simple de ADIF
+        function parseAdif(content) {
+            const records = content.split('<EOR>');
+            const qsoList = [];
+            const fieldsRegex = /<([a-zA-Z0-9_]+):(\d+)>([^<]+)/g;
+            records.forEach(record => {
+                if (record.trim() === '') return;
+                let match;
+                const qso = {};
+                while ((match = fieldsRegex.exec(record)) !== null) {
+                    const fieldName = match[1].toLowerCase();
+                    const value = match[3].trim();
+                    switch (fieldName) {
+                        case 'call': qso.callsign = value; break;
+                        case 'qso_date': qso.qsoDate = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`; break;
+                        case 'time_on': qso.timeOn = `${value.slice(0, 2)}:${value.slice(2, 4)}`; break;
+                        case 'freq': qso.frequency = value; break;
+                        case 'band': qso.band = value; break;
+                        case 'mode': qso.mode = value; break;
+                        case 'rst_sent': qso.rstSent = value; break;
+                    }
+                }
+                if (Object.keys(qso).length > 0) {
+                    qsoList.push(qso);
+                }
+            });
+            return qsoList;
+        }
+
+        // Muestra u oculta la sección de ranking
+        function toggleRanking() {
+            const rankingSection = document.getElementById('ranking-section');
+            if (rankingSection) {
+                rankingSection.classList.toggle('hidden');
+                if (!rankingSection.classList.contains('hidden')) {
+                    renderRanking();
+                }
+            }
+        }
+        
+        // Se ejecuta cuando el DOM está cargado
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // Lógica de inicio de sesión
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const usuario = document.getElementById('usuario').value.toLowerCase().trim();
+                    const clave = document.getElementById('clave').value.trim();
+                    const userEntry = usersDB[usuario];
+                    
+                    const loginContainer = document.getElementById('login-container');
+                    const userPanel = document.getElementById('user-panel');
+                    const loggedInContent = document.getElementById('logged-in-content');
+                    const userInfoButtons = document.getElementById('user-info-buttons');
+
+                    if (userEntry && userEntry.clave === clave) {
+                        loggedInActivator = userEntry.activador;
+                        if (loginContainer) loginContainer.classList.add('hidden');
+                        if (userPanel) userPanel.classList.remove('hidden');
+                        if (loggedInContent) loggedInContent.classList.remove('hidden');
+                        if (userInfoButtons) userInfoButtons.classList.remove('hidden');
+                        
+                        document.getElementById('activador-permanente').value = loggedInActivator;
+                        
+                        // Añadir la bandera si el activador es 'EA4DT'
+                        const flagContainer = document.getElementById('flag-container');
+                        if (flagContainer) {
+                            flagContainer.innerHTML = '';
+                            if (loggedInActivator === 'EA4DT') {
+                                flagContainer.innerHTML = `<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Flag_of_the_Community_of_Madrid.svg/1920px-Flag_of_the_Community_of_Madrid.svg.png" alt="Bandera de la Comunidad de Madrid" class="w-16 h-auto rounded-md shadow-lg">`;
+                            } else if (loggedInActivator === 'EA5JFK') {
+                                flagContainer.innerHTML = `<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Bandera_de_la_Vall_d%27Uix%C3%B3-2.svg/1920px-Bandera_de_la_Vall_d%27Uix%C3%B3-2.svg.png" alt="Bandera de La Vall d'Uixó" class="w-16 h-auto rounded-md shadow-lg">`;
+                            }
+                        }
+
+                        // Cargar y renderizar logbooks
+                        const logbooks = loadLogbooks();
+                        const logbookNames = Object.keys(logbooks);
+                        if (logbookNames.length > 0) {
+                            currentLogbookName = logbookNames[0];
+                        } else {
+                            currentLogbookName = '';
+                        }
+                        renderLogbookSelect(logbooks);
+                        loadRstValue();
+                        updateDateTime();
+                    } else {
+                        showModal("Usuario o clave incorrectos.");
+                    }
+                });
+            }
+
+            // Lógica para crear un nuevo logbook
+            document.getElementById('create-logbook-btn').addEventListener('click', () => {
+                const newLogbookName = document.getElementById('new-logbook-name').value.trim();
+                if (!newLogbookName) {
+                    showModal("Por favor, introduce un nombre para el nuevo logbook.");
+                    return;
+                }
+                const logbooks = loadLogbooks();
+                if (logbooks[newLogbookName]) {
+                    showModal("Ya existe un logbook con este nombre.");
+                    return;
+                }
+                logbooks[newLogbookName] = [];
+                saveLogbooks(logbooks);
+                currentLogbookName = newLogbookName;
+                document.getElementById('new-logbook-name').value = '';
+                showModal(`Logbook "${newLogbookName}" creado con éxito.`);
+            });
+
+            // Lógica para seleccionar un logbook
+            document.getElementById('logbook-select').addEventListener('change', (e) => {
+                currentLogbookName = e.target.value;
+                document.getElementById('current-logbook-name').textContent = `Logbook actual: ${currentLogbookName}`;
+                renderQSOs(loadCurrentLogbookQSOs());
+            });
+
+            // Lógica para registrar un nuevo QSO
+            const qsoForm = document.getElementById('qso-form');
+            if (qsoForm) {
+                qsoForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    if (!loggedInActivator || !currentLogbookName) {
+                        return showModal("Por favor, selecciona o crea un logbook primero.");
+                    }
+                    
+                    const qsoData = {
+                        id: Date.now() + Math.random().toString(36).substring(2, 9),
+                        indicativo: document.getElementById('indicativo').value.toUpperCase(),
+                        frecuencia: document.getElementById('frecuencia').value,
+                        banda: document.getElementById('banda-select').value,
+                        modo: document.getElementById('modo-select').value,
+                        rstEnv: document.getElementById('rst-env-select').value,
+                        activador: loggedInActivator,
+                        date: document.getElementById('fecha-hora-utc').value.split('T')[0],
+                        time: document.getElementById('fecha-hora-utc').value.split('T')[1],
+                        timestamp: Date.now()
+                    };
+
+                    if (!qsoData.indicativo || !qsoData.frecuencia || !qsoData.banda || !qsoData.modo || !qsoData.rstEnv || !qsoData.date) {
+                        return showModal("Por favor, completa todos los campos.");
+                    }
+                    
+                    const logbooks = loadLogbooks();
+                    const qsos = logbooks[currentLogbookName] || [];
+                    qsos.push(qsoData);
+                    logbooks[currentLogbookName] = qsos;
+                    saveLogbooks(logbooks);
+                    saveRstValue(qsoData.rstEnv);
+                    document.getElementById('indicativo').value = '';
+                    showModal("QSO registrado con éxito!");
+                });
+            }
+
+            // Manejadores de eventos para los botones
+            document.getElementById('rst-env-select').addEventListener('change', (e) => saveRstValue(e.target.value));
+            document.getElementById('frecuencia').addEventListener('input', (e) => {
+                const freq = parseFloat(e.target.value);
+                const bandaSelect = document.getElementById('banda-select');
+                if (isNaN(freq)) return bandaSelect.value = '';
+                if (freq >= 1800 && freq <= 2000) bandaSelect.value = '160m';
+                else if (freq >= 3500 && freq <= 4000) bandaSelect.value = '80m';
+                else if (freq >= 7000 && freq <= 7300) bandaSelect.value = '40m';
+                else if (freq >= 14000 && freq <= 14350) bandaSelect.value = '20m';
+                else if (freq >= 21000 && freq <= 21450) bandaSelect.value = '15m';
+                else if (freq >= 28000 && freq <= 29700) bandaSelect.value = '10m';
+                else if (freq >= 50000 && freq <= 54000) bandaSelect.value = '6m';
+                else if (freq >= 144000 && freq <= 148000) bandaSelect.value = '2m';
+                else if (freq >= 430000 && freq <= 450000) bandaSelect.value = '70cm';
+                else bandaSelect.value = '';
+            });
+            document.getElementById('fill-time-btn').addEventListener('click', updateDateTime);
+            document.getElementById('export-adi-btn').addEventListener('click', exportToADI);
+            document.getElementById('import-adif-input').addEventListener('change', importADIF);
+            document.getElementById('delete-selected-btn').addEventListener('click', deleteSelectedRecords);
+            document.getElementById('delete-all-btn').addEventListener('click', deleteAllRecords);
+            document.getElementById('logout-btn').addEventListener('click', logout);
+            document.getElementById('toggle-ranking-btn').addEventListener('click', toggleRanking);
+
+
+            // Manejo de checkboxes
+            document.getElementById('qso-table-body').addEventListener('change', (e) => {
+                if (e.target.matches('.qso-checkbox')) {
+                    const qsoId = e.target.dataset.qsoId;
+                    if (e.target.checked) selectedQsoIds.add(qsoId);
+                    else selectedQsoIds.delete(qsoId);
+                    updateDeleteButtonState();
+                }
+            });
+
+            document.getElementById('select-all-qso').addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                document.querySelectorAll('.qso-checkbox').forEach(cb => {
+                    cb.checked = isChecked;
+                    const qsoId = cb.dataset.qsoId;
+                    if (isChecked) selectedQsoIds.add(qsoId);
+                    else selectedQsoIds.delete(qsoId);
+                });
+                updateDeleteButtonState();
+            });
+            // Auto-actualizar la fecha y hora UTC cada segundo
+            setInterval(updateDateTime, 1000);
+        });
+    </script>
+</head>
+<body class="p-4 md:p-6">
+    <!-- Modal personalizado para mensajes de la aplicación -->
+    <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70">
+        <div class="bg-slate-800 text-white p-6 rounded-lg shadow-xl text-center max-w-sm w-full">
+            <p id="modal-message" class="mb-6"></p>
+            <div class="flex justify-center space-x-4">
+                <button id="modal-confirm-btn" class="btn btn-blue">Aceptar</button>
+                <button id="modal-cancel-btn" class="btn bg-gray-600 hover:bg-gray-700 hidden">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal de confirmación para el borrado total -->
+    <div id="code-confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70">
+        <div class="bg-slate-800 text-white p-6 rounded-lg shadow-xl text-center max-w-sm w-full">
+            <p class="mb-4">Para confirmar, introduce tu indicativo.</p>
+            <input type="text" id="delete-all-code" class="w-full px-4 py-2 text-center bg-slate-700 border-slate-600 rounded-lg mb-4" placeholder="Indicativo">
+            <div class="flex justify-center space-x-4">
+                <button id="code-confirm-btn" class="btn btn-red">Confirmar Borrado</button>
+                <button id="code-cancel-btn" class="btn bg-gray-600 hover:bg-gray-700">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Encabezado y botones de la aplicación -->
+    <header class="mb-8 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+        <h1 class="text-4xl font-extrabold text-blue-400">Log ACTIVDORES RCV</h1>
+        <div id="user-info-buttons" class="flex flex-wrap gap-2 justify-center hidden">
+            <button id="logout-btn" class="btn btn-red">Cerrar sesión</button>
+        </div>
+    </header>
+
+    <!-- Formulario de inicio de sesión -->
+    <div id="login-container" class="max-w-md mx-auto p-8 mb-8 container-card">
+        <div class="flex justify-center mb-6">
+            <img src="https://rcvallduixo.odoo.com/web/image/552-82aca33e/Photoroom_20250709_095010.png" alt="Logotipo de RCV" class="w-48 mx-auto mb-4 rounded-lg">
+        </div>
+        <h2 class="text-2xl font-bold text-slate-200 text-center mb-6">Inicia Sesión</h2>
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label for="usuario" class="block text-slate-300 font-medium mb-2">Usuario</label>
+                <input type="text" id="usuario" class="w-full border" required>
+            </div>
+            <div>
+                <label for="clave" class="block text-slate-300 font-medium mb-2">Clave</label>
+                <input type="password" id="clave" class="w-full border" required>
+            </div>
+            <button type="submit" class="btn btn-blue w-full mt-4">Iniciar Sesión</button>
+        </form>
+    </div>
+
+    <!-- Contenido principal de la aplicación -->
+    <main class="space-y-8">
+        <!-- Panel para crear y seleccionar logbooks -->
+        <section id="user-panel" class="container-card p-6 hidden">
+            <!-- Contenedor para la bandera, se rellenará dinámicamente -->
+            <div id="flag-container" class="flex justify-center mb-4"></div>
+            <h2 class="text-2xl font-bold text-slate-200 mb-4">Gestión de Logbooks</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="new-logbook-name" class="block text-slate-300 font-medium mb-2">Crear nuevo Logbook</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-logbook-name" class="w-full border" placeholder="Nombre del Logbook">
+                        <button type="button" id="create-logbook-btn" class="btn btn-green whitespace-nowrap">Crear</button>
+                    </div>
+                </div>
+                <div>
+                    <label for="logbook-select" class="block text-slate-300 font-medium mb-2">Seleccionar Logbook</label>
+                    <select id="logbook-select" class="w-full border"></select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sección de registro de QSOs -->
+        <section id="logbook-section" class="space-y-8 hidden">
+             <div class="container-card p-6">
+                <h2 class="text-2xl font-bold text-slate-200 mb-4">Registrar nuevo contacto</h2>
+                <p id="current-logbook-name" class="text-lg font-semibold text-slate-400 mb-4"></p>
+                <form id="qso-form" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label for="activador-permanente" class="block text-slate-300 font-medium mb-2">Activador Permanente</label>
+                            <input type="text" id="activador-permanente" class="w-full border" readonly>
+                        </div>
+                        <div>
+                            <label for="indicativo" class="block text-slate-300 font-medium mb-2">Indicativo</label>
+                            <input type="text" id="indicativo" class="w-full border" required>
+                        </div>
+                        <div>
+                            <label for="frecuencia" class="block text-slate-300 font-medium mb-2">Frecuencia (kHz)</label>
+                            <input type="number" id="frecuencia" class="w-full border" required>
+                        </div>
+                        <div>
+                            <label for="banda-select" class="block text-slate-300 font-medium mb-2">Banda</label>
+                            <select id="banda-select" class="w-full border" required>
+                                <option value="">Selecciona una banda</option>
+                                <option value="160m">160m</option><option value="80m">80m</option><option value="40m">40m</option><option value="20m">20m</option><option value="15m">15m</option><option value="10m">10m</option><option value="6m">6m</option><option value="2m">2m</option><option value="70cm">70cm</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="modo-select" class="block text-slate-300 font-medium mb-2">Modo</label>
+                            <select id="modo-select" class="w-full border" required>
+                                <option value="">Selecciona un modo</option>
+                                <option value="SSB">SSB</option><option value="CW">CW</option><option value="FT8">FT8</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="rst-env-select" class="block text-slate-300 font-medium mb-2">RST Env</label>
+                            <select id="rst-env-select" class="w-full border" required>
+                                <option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option><option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option><option value="59+">59+</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                        <div class="w-full">
+                             <label for="fecha-hora-utc" class="block text-slate-300 font-medium mb-2">Fecha y Hora (UTC)</label>
+                             <input type="datetime-local" id="fecha-hora-utc" class="w-full border" required>
+                        </div>
+                        <button type="button" id="fill-time-btn" class="btn bg-slate-600 hover:bg-slate-700 text-white h-10 w-full sm:w-auto">Rellenar Hora UTC</button>
+                    </div>
+                    <div class="flex justify-center mt-6">
+                        <button type="submit" class="btn btn-blue w-full md:w-1/2 lg:w-1/3">Registrar QSO</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Sección de ranking y log de QSOs -->
+        <section id="logged-in-content" class="space-y-8 hidden">
+            <div class="flex flex-col md:flex-row justify-end items-center gap-4">
+                <button id="toggle-ranking-btn" class="btn btn-purple">Ver Ranking</button>
+            </div>
+            
+            <section id="ranking-section" class="container-card p-6 hidden">
+                <h2 class="text-2xl font-bold text-slate-200 mb-4">Ranking</h2>
+                <div class="table-container">
+                    <table class="w-full logbook-table">
+                        <thead class="table-header">
+                            <tr>
+                                <th class="table-cell">Posición</th>
+                                <th class="table-cell">Activador</th>
+                                <th class="table-cell">Total QSOs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ranking-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div>
+                <h2 class="text-2xl font-bold text-slate-200 mb-4">Log de QSOs</h2>
+                <div class="flex flex-col md:flex-row justify-end items-center gap-4">
+                    <button id="export-adi-btn" class="btn btn-green">Exportar a ADI</button>
+                    <label for="import-adif-input" class="btn btn-orange cursor-pointer">
+                        Importar ADIF
+                        <input type="file" id="import-adif-input" accept=".adif,.adi" class="hidden">
+                    </label>
+                    <button id="delete-selected-btn" class="btn btn-red" disabled>Borrar seleccionados</button>
+                    <button id="delete-all-btn" class="btn btn-red">Borrar este Logbook</button>
+                </div>
+                <div class="table-container mt-4">
+                    <table class="w-full logbook-table">
+                        <thead class="table-header">
+                            <tr>
+                                <th class="table-cell w-12"><input type="checkbox" id="select-all-qso" class="h-4 w-4 text-blue-600 rounded focus:ring-blue-500 bg-slate-600 border-slate-500"></th>
+                                <th class="table-cell">INDICATIVO</th>
+                                <th class="table-cell">FRECUENCIA</th>
+                                <th class="table-cell">BANDA</th>
+                                <th class="table-cell">MODO</th>
+                                <th class="table-cell">RST ENV</th>
+                                <th class="table-cell">FECHA / HORA (UTC)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="qso-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Iframe para el DX Cluster -->
+            <div class="container-card p-6">
+                <h2 class="text-2xl font-bold text-slate-200 mb-4">Cluster de DX</h2>
+                <div class="w-full overflow-hidden rounded-lg border border-slate-700">
+                    <iframe src="https://www.dxfuncluster.com/" width="100%" height="500" frameborder="0"></iframe>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
